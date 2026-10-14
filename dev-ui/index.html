@@ -1,0 +1,654 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Capacity test console</title>
+<link rel="icon" href="data:,">
+<!--
+  Manual test console for the Program Capacity Service (local only, DEV_UI_ENABLED=true).
+  A static page served by the service at /ui: no build step, no dependencies. Every API call
+  carries a bearer token, obtained from the docker-compose Keycloak or pasted in.
+-->
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #f5f6f8; --panel: #fff; --ink: #1c2128; --muted: #636c76; --line: #d8dee4;
+  --soft: #eef1f4; --accent: #0969da; --ok: #1a7f37; --warn: #9a6700; --bad: #cf222e;
+  font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0d1117; --panel: #161b22; --ink: #e6edf3; --muted: #8d96a0; --line: #30363d;
+    --soft: #1f242c; --accent: #4493f8; --ok: #3fb950; --warn: #d29922; --bad: #f85149;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); }
+header {
+  position: sticky; top: 0; z-index: 1; display: flex; flex-wrap: wrap; align-items: center;
+  gap: 8px 12px; padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--line);
+}
+header h1 { font-size: 16px; margin: 0 12px 0 0; }
+header select { width: auto; }
+header #token { flex: 1 1 260px; min-width: 0; }
+#notice { flex-basis: 100%; margin: 0; font-size: 12px; }
+#notice:empty { display: none; }
+main {
+  display: grid; grid-template-columns: minmax(260px, 340px) minmax(0, 1fr); gap: 16px;
+  padding: 16px; align-items: start;
+}
+@media (max-width: 900px) { main { grid-template-columns: minmax(0, 1fr); } }
+h2 { font-size: 15px; margin: 0 0 10px; display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
+h3 { font-size: 12px; margin: 0 0 10px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px; min-width: 0; }
+.stack { display: grid; gap: 16px; min-width: 0; }
+.forms { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
+label { display: grid; gap: 2px; font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+.row { display: grid; grid-template-columns: minmax(0, 1fr) 90px; gap: 8px; }
+input, select, button { font: inherit; color: inherit; }
+input, select { width: 100%; padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); }
+button { padding: 5px 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--soft); cursor: pointer; }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+button:disabled { opacity: .5; cursor: default; }
+button.link { border: 0; background: none; padding: 0; color: var(--accent); font-size: 12px; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th { font-weight: 600; color: var(--muted); font-size: 12px; }
+.num { text-align: right; font-variant-numeric: tabular-nums; }
+.scroll { overflow-x: auto; }
+.scroll.tall { max-height: 460px; overflow-y: auto; }
+.scroll.tall th { position: sticky; top: 0; background: var(--panel); }
+tr.selectable { cursor: pointer; }
+tr.selectable:hover { background: var(--soft); }
+tr.selected { background: var(--soft); box-shadow: inset 3px 0 var(--accent); }
+.muted { color: var(--muted); } .ok { color: var(--ok); } .warn { color: var(--warn); } .bad { color: var(--bad); }
+.badge { display: inline-block; padding: 0 7px; border-radius: 999px; font-size: 11px; font-weight: 600; border: 1px solid currentColor; }
+.figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin: 4px 0 12px; }
+.figure small { display: block; color: var(--muted); font-size: 12px; }
+.figure strong { font-size: 22px; font-variant-numeric: tabular-nums; }
+.bar { height: 10px; border-radius: 5px; background: var(--soft); overflow: hidden; }
+.bar > div { height: 100%; width: 0; background: var(--accent); transition: width .3s; }
+.bar.over > div { background: var(--bad); }
+.flash { animation: flash .9s; }
+@keyframes flash { from { background: color-mix(in srgb, var(--accent) 22%, transparent); } }
+.result { font-size: 12px; margin-top: 8px; min-height: 1.4em; overflow-wrap: anywhere; }
+.feed { list-style: none; margin: 10px 0 0; padding: 0; font-size: 12px; color: var(--muted); }
+.feed li { font-variant-numeric: tabular-nums; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.chip { padding: 1px 8px; border-radius: 6px; background: var(--soft); font-size: 12px; }
+#log { list-style: none; margin: 0; padding: 0; }
+#log li { border-bottom: 1px solid var(--line); padding: 5px 0; font-size: 13px; }
+#log summary { cursor: pointer; display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline; }
+code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
+pre { background: var(--soft); padding: 8px; border-radius: 6px; overflow: auto; max-height: 280px; margin: 6px 0 0; }
+.empty { color: var(--muted); font-size: 13px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Capacity test console</h1>
+  <select id="client" aria-label="OAuth client">
+    <option value="invoice-service">invoice-service · read, reserve, release</option>
+    <option value="capacity-reader">capacity-reader · read only</option>
+  </select>
+  <button id="get-token" class="primary" type="button">Get token</button>
+  <input id="token" placeholder="…or paste a bearer token (pnpm token)" aria-label="Bearer token" autocomplete="off">
+  <span id="token-info" class="muted"></span>
+  <p id="notice"></p>
+</header>
+
+<main>
+  <section class="panel">
+    <h2>Programs <button id="reload-programs" class="link" type="button">reload</button></h2>
+    <div class="scroll"><table id="programs"></table></div>
+    <p class="muted" style="font-size:12px">Programs, limits and FX rates come from treasury over Kafka:
+      <code>pnpm treasury seed</code>, <code>pnpm treasury program …</code>, <code>pnpm treasury fx …</code></p>
+  </section>
+
+  <div class="stack">
+    <section class="panel" id="capacity">
+      <h2><span id="program-title">Select a program</span> <span id="program-meta" class="muted"></span>
+        <span id="stream-state" class="muted" style="margin-left:auto;font-size:12px"></span></h2>
+      <div class="figures">
+        <div class="figure"><small>Credit limit</small><strong id="f-limit">—</strong></div>
+        <div class="figure"><small>Reserved</small><strong id="f-reserved">—</strong></div>
+        <div class="figure"><small>Available</small><strong id="f-available">—</strong></div>
+        <div class="figure"><small>Version</small><strong id="f-version">—</strong></div>
+      </div>
+      <div class="bar" id="f-bar"><div></div></div>
+      <ul class="feed" id="feed"></ul>
+    </section>
+
+    <div class="forms">
+      <form class="panel" id="reserve-form">
+        <h3>Reserve</h3>
+        <label>Invoice id <input id="r-invoice" required></label>
+        <div class="row">
+          <label>Amount <input id="r-amount" value="1000.00" inputmode="decimal" required></label>
+          <label>Currency <input id="r-currency" list="currencies" value="USD" required></label>
+        </div>
+        <button class="primary" type="submit">Reserve</button>
+        <div class="result" id="r-result"></div>
+      </form>
+
+      <form class="panel" id="release-form">
+        <h3>Release</h3>
+        <label>Invoice id <input id="l-invoice" required></label>
+        <label>Release id (repayment id) <input id="l-release" required></label>
+        <div class="row">
+          <label>Amount (empty = all) <input id="l-amount" inputmode="decimal"></label>
+          <label>Currency <input id="l-currency" list="currencies" value="USD"></label>
+        </div>
+        <button class="primary" type="submit">Release</button>
+        <div class="result" id="l-result"></div>
+      </form>
+
+      <form class="panel" id="burst-form">
+        <h3>Concurrency burst</h3>
+        <label>Parallel reservations <input id="b-count" type="number" min="1" max="500" value="50" required></label>
+        <div class="row">
+          <label>Amount each <input id="b-amount" value="10000.00" inputmode="decimal" required></label>
+          <label>Currency <input id="b-currency" list="currencies" value="USD" required></label>
+        </div>
+        <button class="primary" type="submit">Fire</button>
+        <div class="result" id="b-result"></div>
+      </form>
+    </div>
+
+    <section class="panel">
+      <h2>Reservations
+        <select id="res-status" style="width:auto;font-size:12px">
+          <option value="">all</option><option value="ACTIVE">active</option><option value="RELEASED">released</option>
+        </select>
+        <button id="reload-reservations" class="link" type="button">reload</button>
+        <span id="res-count" class="muted" style="font-size:12px"></span>
+      </h2>
+      <div class="scroll tall"><table id="reservations"></table></div>
+    </section>
+
+    <section class="panel">
+      <h2>Requests <button id="clear-log" class="link" type="button">clear</button></h2>
+      <ol id="log"></ol>
+    </section>
+  </div>
+</main>
+
+<datalist id="currencies">
+  <option value="USD"><option value="EUR"><option value="GBP"><option value="JPY"><option value="AED"><option value="CHF">
+</datalist>
+
+<script>
+'use strict';
+
+// Local docker-compose realm only (docker/keycloak/capacity-realm.json); never real secrets.
+const TOKEN_URL = 'http://localhost:8080/realms/capacity/protocol/openid-connect/token';
+const CLIENT_SECRETS = {
+  'invoice-service': 'invoice-service-secret',
+  'capacity-reader': 'capacity-reader-secret',
+};
+
+const state = {
+  token: '',
+  renewTimer: undefined,
+  programs: new Map(),
+  program: null,
+  stream: null,
+  lastCapacity: null,
+  reservationsRequest: 0,
+  reservationsTimer: undefined,
+};
+
+// ---------------------------------------------------------------- helpers
+
+const $ = (id) => document.getElementById(id);
+
+/** Builds an element; children are appended as text unless they are nodes (no innerHTML). */
+function h(tag, props = {}, ...children) {
+  const element = document.createElement(tag);
+  for (const [key, value] of Object.entries(props)) {
+    if (key === 'class') element.className = value;
+    else if (key.startsWith('on')) element.addEventListener(key.slice(2), value);
+    else if (value !== undefined && value !== null && value !== false) element.setAttribute(key, value === true ? '' : value);
+  }
+  for (const child of children.flat()) {
+    if (child !== undefined && child !== null && child !== false) element.append(child instanceof Node ? child : String(child));
+  }
+  return element;
+}
+
+const enc = encodeURIComponent;
+const programPath = () => `/v1/programs/${enc(state.program)}`;
+const newId = (prefix) => `${prefix}-${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).slice(2, 5).toUpperCase()}`;
+const time = (iso) => (iso ? new Date(iso).toLocaleTimeString() : '—');
+
+/** "1234567.50" → "1,234,567.50" (display only; amounts stay strings). */
+function grouped(value) {
+  if (value === undefined || value === null) return '—';
+  const negative = value.startsWith('-');
+  const [integer, fraction] = value.replace('-', '').split('.');
+  const digits = integer.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return `${negative ? '−' : ''}${digits}${fraction !== undefined ? `.${fraction}` : ''}`;
+}
+
+/** Exact difference of two decimal strings with the same scale, e.g. for the change feed. */
+function difference(after, before) {
+  const scale = (after.split('.')[1] ?? '').length;
+  const minor = (value) => BigInt(value.replace('.', ''));
+  const delta = minor(after) - minor(before);
+  const digits = (delta < 0n ? -delta : delta).toString().padStart(scale + 1, '0');
+  const text = scale ? `${digits.slice(0, -scale)}.${digits.slice(-scale)}` : digits;
+  return `${delta < 0n ? '−' : '+'}${grouped(text)}`;
+}
+
+function store(key, value) { try { localStorage.setItem(key, value); } catch { /* private mode */ } }
+function load(key) { try { return localStorage.getItem(key); } catch { return null; } }
+
+function notice(message, tone = 'muted') {
+  $('notice').className = tone;
+  $('notice').textContent = message;
+}
+
+function flash(element) {
+  element.classList.remove('flash');
+  void element.offsetWidth; // restart the animation
+  element.classList.add('flash');
+}
+
+// ---------------------------------------------------------------- auth
+
+function claims(token) {
+  try {
+    return JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+  } catch {
+    return null;
+  }
+}
+
+function setToken(token, renewable) {
+  state.token = token.trim();
+  $('token').value = state.token;
+  clearTimeout(state.renewTimer);
+  const payload = claims(state.token);
+  if (renewable && payload?.exp) {
+    // Fetch a fresh token shortly before this one expires.
+    state.renewTimer = setTimeout(getToken, Math.max(5_000, payload.exp * 1000 - Date.now() - 30_000));
+  }
+  showTokenInfo();
+  loadPrograms();
+  if (state.program) selectProgram(state.program);
+}
+
+function showTokenInfo() {
+  const payload = claims(state.token);
+  const info = $('token-info');
+  if (!state.token) { info.textContent = 'no token'; info.className = 'warn'; return; }
+  if (!payload) { info.textContent = 'not a JWT'; info.className = 'bad'; return; }
+  const seconds = Math.round(payload.exp - Date.now() / 1000);
+  const expiry = seconds > 0 ? `expires in ${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}` : 'expired';
+  info.textContent = `${payload.azp ?? payload.sub} · ${payload.scope ?? ''} · ${expiry}`;
+  info.className = seconds > 0 ? 'muted' : 'bad';
+}
+
+async function getToken() {
+  const client = $('client').value;
+  try {
+    const response = await fetch(TOKEN_URL, {
+      method: 'POST',
+      body: new URLSearchParams({ grant_type: 'client_credentials', client_id: client, client_secret: CLIENT_SECRETS[client] }),
+    });
+    if (!response.ok) throw new Error(`Keycloak answered ${response.status}`);
+    setToken((await response.json()).access_token, true);
+    notice('');
+  } catch (error) {
+    notice(
+      `Could not get a token from Keycloak (${error.message}). If Keycloak runs with an older realm, recreate it ` +
+        '(docker compose up -d --force-recreate keycloak) — or paste a token from "pnpm token".',
+      'bad',
+    );
+  }
+}
+
+// ---------------------------------------------------------------- API + request log
+
+/** Calls the API; every call except background refreshes is shown in the request log. */
+async function api(method, path, body, { quiet = false } = {}) {
+  const started = performance.now();
+  let status = 0;
+  let data = null;
+  try {
+    const response = await fetch(path, {
+      method,
+      headers: {
+        Authorization: `Bearer ${state.token}`,
+        ...(body ? { 'Content-Type': 'application/json' } : {}),
+      },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    status = response.status;
+    const text = await response.text();
+    data = text ? JSON.parse(text) : null;
+  } catch (error) {
+    data = { error: error.message };
+  }
+  if (!quiet) logRequest(method, path, status, body, data, performance.now() - started);
+  return { status, ok: status >= 200 && status < 300, data };
+}
+
+function logRequest(method, path, status, body, data, ms, label) {
+  const tone = status >= 200 && status < 300 ? 'ok' : status >= 500 || status === 0 ? 'bad' : 'warn';
+  const entry = h('li', {},
+    h('details', {},
+      h('summary', {},
+        h('span', { class: `badge ${tone}` }, label ?? (status || 'ERR')),
+        h('code', {}, `${method} ${path}`),
+        data?.code ? h('strong', { class: tone }, data.code) : null,
+        h('span', { class: 'muted' }, `${Math.round(ms)} ms · ${new Date().toLocaleTimeString()}`),
+      ),
+      body ? h('pre', {}, `request ${JSON.stringify(body, null, 2)}`) : null,
+      h('pre', {}, JSON.stringify(data, null, 2)),
+    ),
+  );
+  const log = $('log');
+  log.prepend(entry);
+  while (log.children.length > 40) log.lastChild.remove();
+}
+
+/** One line for a form: what happened, or the problem+json code and detail. */
+function showResult(id, { status, ok, data }, summary) {
+  const element = $(id);
+  element.replaceChildren(
+    h('span', { class: `badge ${ok ? 'ok' : 'bad'}` }, status || 'ERR'), ' ',
+    ok ? summary(data) : `${data?.code ?? ''} ${data?.detail ?? data?.error ?? ''}`.trim(),
+  );
+}
+
+// ---------------------------------------------------------------- programs
+
+async function loadPrograms() {
+  if (!state.token) return;
+  const { ok, data } = await api('GET', '/v1/programs?limit=200');
+  if (!ok) return;
+  state.programs = new Map(data.items.map((program) => [program.programId, program]));
+  renderPrograms();
+}
+
+function renderPrograms() {
+  const rows = [...state.programs.values()].map((program) =>
+    h('tr', {
+      class: `selectable ${program.programId === state.program ? 'selected' : ''}`,
+      onclick: () => selectProgram(program.programId),
+    },
+      h('td', {}, h('strong', {}, program.programId), h('br'), h('span', { class: 'muted' }, `${program.currency} · ${program.status}`)),
+      h('td', { class: `num ${program.available.startsWith('-') ? 'bad' : ''}` }, grouped(program.available), h('br'),
+        h('span', { class: 'muted' }, `of ${grouped(program.creditLimit)}`)),
+    ),
+  );
+  $('programs').replaceChildren(
+    h('tr', {}, h('th', {}, 'Program'), h('th', { class: 'num' }, 'Available')),
+    ...(rows.length ? rows : [h('tr', {}, h('td', { colspan: 2, class: 'empty' }, 'No programs yet — run pnpm treasury seed.'))]),
+  );
+}
+
+function selectProgram(programId) {
+  state.program = programId;
+  state.lastCapacity = null;
+  store('program', programId);
+  $('program-title').textContent = programId;
+  $('feed').replaceChildren();
+  const program = state.programs.get(programId);
+  if (program) renderCapacity(program);
+  renderPrograms();
+  openStream(programId);
+  loadReservations();
+}
+
+// ---------------------------------------------------------------- live capacity (SSE over fetch)
+
+/** EventSource cannot send an Authorization header, so the stream is read with fetch. */
+async function openStream(programId) {
+  state.stream?.abort();
+  const controller = new AbortController();
+  state.stream = controller;
+  setStreamState('connecting…', 'muted');
+  try {
+    const response = await fetch(`/v1/programs/${enc(programId)}/capacity/stream`, {
+      headers: { Authorization: `Bearer ${state.token}`, Accept: 'text/event-stream' },
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      const problem = await response.json().catch(() => null);
+      setStreamState(`stream refused: ${response.status} ${problem?.code ?? ''}`, 'bad');
+      return;
+    }
+    setStreamState('● live', 'ok');
+    const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+    let buffer = '';
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += value;
+      let boundary;
+      while ((boundary = buffer.indexOf('\n\n')) >= 0) {
+        handleEvent(buffer.slice(0, boundary));
+        buffer = buffer.slice(boundary + 2);
+      }
+    }
+    setStreamState('stream ended — reconnecting', 'warn');
+  } catch {
+    if (controller.signal.aborted) return;
+    setStreamState('stream lost — reconnecting', 'warn');
+  }
+  setTimeout(() => {
+    if (state.stream === controller) openStream(programId);
+  }, 2_000);
+}
+
+function handleEvent(block) {
+  const fields = {};
+  for (const line of block.split('\n')) {
+    const colon = line.indexOf(':');
+    if (colon <= 0) continue;
+    const key = line.slice(0, colon);
+    const value = line.slice(colon + 1).replace(/^ /, '');
+    fields[key] = key in fields ? `${fields[key]}\n${value}` : value;
+  }
+  if (!fields.data) return;
+  const data = JSON.parse(fields.data);
+  if (fields.event === 'heartbeat') {
+    setStreamState(`● live · heartbeat ${time(data.at)}`, 'ok');
+  } else if (fields.event === 'capacity' && data.programId === state.program) {
+    renderCapacity(data);
+    state.programs.set(data.programId, data);
+    renderPrograms();
+    scheduleReservationsRefresh();
+  }
+}
+
+function setStreamState(text, tone) {
+  $('stream-state').textContent = text;
+  $('stream-state').className = tone;
+}
+
+function renderCapacity(capacity) {
+  const previous = state.lastCapacity;
+  state.lastCapacity = capacity;
+  if (!previous) {
+    for (const id of ['r-currency', 'b-currency', 'l-currency']) $(id).value = capacity.currency;
+  }
+  $('program-meta').textContent = `${capacity.currency} · ${capacity.status} · ${
+    capacity.lastReconciledAt ? `reconciled ${time(capacity.lastReconciledAt)}` : 'never reconciled'
+  }`;
+  $('f-limit').textContent = grouped(capacity.creditLimit);
+  $('f-reserved').textContent = grouped(capacity.reserved);
+  $('f-available').textContent = grouped(capacity.available);
+  $('f-available').className = capacity.available.startsWith('-') ? 'bad' : '';
+  $('f-version').textContent = `v${capacity.version}`;
+  const used = Number(capacity.creditLimit) > 0 ? Number(capacity.reserved) / Number(capacity.creditLimit) : 1;
+  $('f-bar').classList.toggle('over', used > 1);
+  $('f-bar').firstElementChild.style.width = `${Math.min(100, used * 100).toFixed(2)}%`;
+  if (previous && previous.version !== capacity.version) {
+    flash($('capacity'));
+    $('feed').prepend(h('li', {},
+      `${time(capacity.updatedAt)} · v${capacity.version} · reserved ${difference(capacity.reserved, previous.reserved)}`,
+      capacity.creditLimit !== previous.creditLimit ? ` · limit ${difference(capacity.creditLimit, previous.creditLimit)}` : '',
+      capacity.status !== previous.status ? ` · ${capacity.status}` : '',
+      ` → available ${grouped(capacity.available)}`,
+    ));
+    while ($('feed').children.length > 6) $('feed').lastChild.remove();
+  }
+}
+
+// ---------------------------------------------------------------- reservations
+
+function scheduleReservationsRefresh() {
+  clearTimeout(state.reservationsTimer);
+  state.reservationsTimer = setTimeout(loadReservations, 300);
+}
+
+async function loadReservations({ quiet = true } = {}) {
+  if (!state.program || !state.token) return;
+  const request = ++state.reservationsRequest;
+  const status = $('res-status').value;
+  const items = [];
+  let cursor = null;
+  // The API pages oldest first; read up to 1,000 and show the newest first.
+  for (let page = 0; page < 5; page++) {
+    const query = new URLSearchParams({ limit: '200', ...(status ? { status } : {}), ...(cursor ? { cursor } : {}) });
+    const { ok, data } = await api('GET', `${programPath()}/reservations?${query}`, undefined, { quiet: quiet || page > 0 });
+    if (!ok || request !== state.reservationsRequest) return;
+    items.push(...data.items);
+    cursor = data.nextCursor;
+    if (!cursor) break;
+  }
+  renderReservations(items.reverse(), Boolean(cursor));
+}
+
+function renderReservations(items, truncated) {
+  $('res-count').textContent = `${items.length}${truncated ? '+' : ''} shown`;
+  const header = h('tr', {},
+    h('th', {}, 'Invoice'), h('th', {}, 'Status'), h('th', { class: 'num' }, 'Invoice amount'),
+    h('th', { class: 'num' }, 'Reserved'), h('th', { class: 'num' }, 'Outstanding'), h('th', {}, 'Rate'),
+    h('th', {}, 'Source'), h('th', {}, 'Created'), h('th', {}, ''),
+  );
+  const rows = items.map((reservation) =>
+    h('tr', {},
+      h('td', {}, h('code', {}, reservation.invoiceId)),
+      h('td', {},
+        h('span', { class: `badge ${reservation.status === 'ACTIVE' ? 'ok' : 'muted'}` }, reservation.status),
+        reservation.discrepancy ? h('span', { class: 'badge warn', title: 'Missing from the last treasury snapshot' }, ' discrepancy') : null,
+      ),
+      h('td', { class: 'num' }, `${grouped(reservation.invoiceAmount.value)} ${reservation.invoiceAmount.currency}`),
+      h('td', { class: 'num' }, grouped(reservation.reservedAmount.value)),
+      h('td', { class: 'num' }, grouped(reservation.outstandingAmount.value)),
+      h('td', { class: 'muted' }, reservation.fxRate ?? '—'),
+      h('td', { class: 'muted' }, reservation.source),
+      h('td', { class: 'muted' }, time(reservation.createdAt)),
+      h('td', {},
+        reservation.status === 'ACTIVE'
+          ? h('button', { class: 'link', type: 'button', onclick: () => prepareRelease(reservation) }, 'release…')
+          : null,
+        ' ',
+        h('button', {
+          class: 'link', type: 'button',
+          onclick: () => api('GET', `${programPath()}/reservations/${enc(reservation.invoiceId)}`),
+        }, 'details'),
+      ),
+    ),
+  );
+  $('reservations').replaceChildren(
+    header,
+    ...(rows.length ? rows : [h('tr', {}, h('td', { colspan: 9, class: 'empty' }, 'No reservations.'))]),
+  );
+}
+
+function prepareRelease(reservation) {
+  $('l-invoice').value = reservation.invoiceId;
+  $('l-release').value = newId('RPM');
+  $('l-amount').value = '';
+  $('l-currency').value = reservation.invoiceAmount.currency;
+  $('l-amount').focus();
+}
+
+// ---------------------------------------------------------------- forms
+
+$('reserve-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  if (!state.program) return notice('Select a program first.', 'warn');
+  const result = await api('POST', `${programPath()}/reservations`, {
+    invoiceId: $('r-invoice').value.trim(),
+    amount: { value: $('r-amount').value.trim(), currency: $('r-currency').value.trim() },
+  });
+  showResult('r-result', result, (reservation) =>
+    `${result.status === 201 ? 'reserved' : 'replayed'} ${grouped(reservation.reservedAmount.value)} ${reservation.reservedAmount.currency}` +
+    (reservation.fxRate !== '1' ? ` at ${reservation.fxRate}` : ''),
+  );
+  if (result.status === 201) $('r-invoice').value = newId('INV');
+});
+
+$('release-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  if (!state.program) return notice('Select a program first.', 'warn');
+  const value = $('l-amount').value.trim();
+  const result = await api('POST', `${programPath()}/reservations/${enc($('l-invoice').value.trim())}/releases`, {
+    releaseId: $('l-release').value.trim(),
+    ...(value ? { amount: { value, currency: $('l-currency').value.trim() } } : {}),
+  });
+  showResult('l-result', result, ({ release, reservation }) =>
+    `${result.status === 201 ? 'released' : 'replayed'} ${grouped(release.releasedAmount.value)} ${release.releasedAmount.currency}` +
+    ` · ${reservation.status} · outstanding ${grouped(reservation.outstandingAmount.value)}`,
+  );
+  if (result.status === 201) $('l-release').value = newId('RPM');
+});
+
+$('burst-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  if (!state.program) return notice('Select a program first.', 'warn');
+  const count = Math.min(500, Math.max(1, Number($('b-count').value)));
+  const amount = { value: $('b-amount').value.trim(), currency: $('b-currency').value.trim() };
+  const batch = newId('BURST');
+  const button = event.submitter;
+  button.disabled = true;
+  $('b-result').textContent = `firing ${count} requests…`;
+  const started = performance.now();
+  const results = await Promise.all(
+    Array.from({ length: count }, (_, i) =>
+      api('POST', `${programPath()}/reservations`, { invoiceId: `${batch}-${i}`, amount }, { quiet: true }),
+    ),
+  );
+  const tally = new Map();
+  for (const { status, data } of results) {
+    const key = data?.code ? `${status} ${data.code}` : String(status);
+    tally.set(key, (tally.get(key) ?? 0) + 1);
+  }
+  const ms = Math.round(performance.now() - started);
+  const failed = results.some((result) => result.status === 0 || result.status >= 500);
+  logRequest('POST', `${programPath()}/reservations`, failed ? 500 : 200, { count, amount }, Object.fromEntries(tally), ms, `×${count}`);
+  $('b-result').replaceChildren(
+    `${count} parallel requests in ${ms} ms (invoices ${batch}-*)`,
+    h('div', { class: 'chips' }, [...tally].map(([key, n]) => h('span', { class: 'chip' }, `${key} × ${n}`))),
+  );
+  button.disabled = false;
+});
+
+// ---------------------------------------------------------------- wiring
+
+$('get-token').addEventListener('click', getToken);
+$('client').addEventListener('change', () => { store('client', $('client').value); getToken(); });
+$('token').addEventListener('change', () => setToken($('token').value, false));
+$('reload-programs').addEventListener('click', loadPrograms);
+$('reload-reservations').addEventListener('click', () => loadReservations({ quiet: false }));
+$('res-status').addEventListener('change', () => loadReservations());
+$('clear-log').addEventListener('click', () => $('log').replaceChildren());
+setInterval(showTokenInfo, 1_000);
+
+$('client').value = load('client') ?? 'invoice-service';
+$('r-invoice').value = newId('INV');
+$('l-release').value = newId('RPM');
+state.program = load('program');
+renderPrograms();
+showTokenInfo();
+getToken();
+</script>
+</body>
+</html>
