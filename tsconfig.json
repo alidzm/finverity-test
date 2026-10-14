@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    // Authoring: extensionless relative imports and the "@/" alias. tsc only type-checks;
+    // the SWC builder (nest-cli.json) emits ES modules with fully resolved ".js" specifiers.
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "paths": { "@/*": ["./src/*"] },
+    "esModuleInterop": true,
+    "isolatedModules": true,
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "allowSyntheticDefaultImports": true,
+    "target": "ES2023",
+    "sourceMap": true,
+    "outDir": "./dist",
+    "rootDir": ".",
+    "incremental": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "strictPropertyInitialization": false,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "useUnknownInCatchVariables": true,
+    "types": ["vitest/globals", "node"]
+  },
+  "include": ["src", "test", "scripts", "*.config.ts"]
+}
