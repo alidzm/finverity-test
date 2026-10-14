@@ -1,0 +1,95 @@
+{
+  "realm": "capacity",
+  "enabled": true,
+  "sslRequired": "none",
+  "accessTokenLifespan": 900,
+  "clientScopes": [
+    {
+      "name": "basic",
+      "description": "Standard claims (sub) required by the resource server",
+      "protocol": "openid-connect",
+      "attributes": { "include.in.token.scope": "false", "display.on.consent.screen": "false" },
+      "protocolMappers": [
+        {
+          "name": "sub",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-sub-mapper",
+          "consentRequired": false,
+          "config": { "access.token.claim": "true", "introspection.token.claim": "true" }
+        }
+      ]
+    },
+    {
+      "name": "capacity-audience",
+      "description": "Adds the capacity-service audience to access tokens",
+      "protocol": "openid-connect",
+      "attributes": { "include.in.token.scope": "false", "display.on.consent.screen": "false" },
+      "protocolMappers": [
+        {
+          "name": "capacity-service-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.custom.audience": "capacity-service",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "capacity:read",
+      "description": "Read program capacity and reservations",
+      "protocol": "openid-connect",
+      "attributes": { "include.in.token.scope": "true", "display.on.consent.screen": "false" }
+    },
+    {
+      "name": "capacity:reserve",
+      "description": "Reserve capacity for approved invoices",
+      "protocol": "openid-connect",
+      "attributes": { "include.in.token.scope": "true", "display.on.consent.screen": "false" }
+    },
+    {
+      "name": "capacity:release",
+      "description": "Release capacity after repayments",
+      "protocol": "openid-connect",
+      "attributes": { "include.in.token.scope": "true", "display.on.consent.screen": "false" }
+    }
+  ],
+  "clients": [
+    {
+      "clientId": "invoice-service",
+      "name": "Invoice approval service — read, reserve and release",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "invoice-service-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "webOrigins": ["http://localhost:3000", "http://127.0.0.1:3000"],
+      "defaultClientScopes": ["basic", "capacity-audience", "capacity:read", "capacity:reserve", "capacity:release"],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "capacity-reader",
+      "name": "Dashboard / reporting — read only",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "capacity-reader-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "webOrigins": ["http://localhost:3000", "http://127.0.0.1:3000"],
+      "defaultClientScopes": ["basic", "capacity-audience", "capacity:read"],
+      "optionalClientScopes": []
+    }
+  ]
+}

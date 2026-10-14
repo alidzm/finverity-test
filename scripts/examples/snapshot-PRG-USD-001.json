@@ -1,0 +1,21 @@
+{
+  "currency": "USD",
+  "creditLimit": "12000000.00",
+  "status": "ACTIVE",
+  "reservations": [
+    {
+      "invoiceId": "INV-TREASURY-0001",
+      "invoiceAmount": { "value": "250000.00", "currency": "USD" },
+      "reservedAmount": "250000.00",
+      "releasedAmount": "0.00",
+      "releasedInvoiceAmount": "0.00"
+    },
+    {
+      "invoiceId": "INV-TREASURY-0002",
+      "invoiceAmount": { "value": "100000.00", "currency": "EUR" },
+      "reservedAmount": "108340.00",
+      "releasedAmount": "54170.00",
+      "releasedInvoiceAmount": "50000.00"
+    }
+  ]
+}
